@@ -2,7 +2,7 @@ const express = require("express"),
 	logger = require("morgan"),
 	mongoose = require("mongoose"),
 	compression = require("compression"),
-	PORT = 3500,
+	PORT = process.env.PORT || 3500,
 	app = express();
 
 mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost/budget", {
