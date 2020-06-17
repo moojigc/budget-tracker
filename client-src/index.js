@@ -1,8 +1,12 @@
+// @ts-check
 import registerSW from "./register-service-worker";
+import { useIndexedDb } from "./indexedDb";
+import { populateChart, populateTable, populateTotal } from "./chart-helpers";
 let transactions = [];
 let myChart;
 
 registerSW();
+useIndexedDb("budget-tracker-pending", "pending", "post");
 
 fetch("/api/transaction")
 	.then((response) => {
@@ -12,76 +16,23 @@ fetch("/api/transaction")
 		// save db data on global variable
 		transactions = data;
 
-		populateTotal();
-		populateTable();
-		populateChart();
+		populateTotal(transactions);
+		populateTable(transactions);
+		populateChart(transactions, myChart);
+
+		// save server data to indexeddb
+		useIndexedDb("budget-tracker", "transactions", "putArr", transactions);
+	})
+	.catch((err) => {
+		// get from indexeddb
+		useIndexedDb("budget-tracker", "transactions").then((data) => {
+			transactions = data;
+
+			populateTotal(transactions);
+			populateTable(transactions);
+			populateChart(transactions, myChart);
+		});
 	});
-
-function populateTotal() {
-	// reduce transaction amounts to a single total value
-	let total = transactions.reduce((total, t) => {
-		return total + parseInt(t.value);
-	}, 0);
-
-	let totalEl = document.querySelector("#total");
-	totalEl.textContent = total;
-}
-
-function populateTable() {
-	let tbody = document.querySelector("#tbody");
-	tbody.innerHTML = "";
-
-	transactions.forEach((transaction) => {
-		// create and populate a table row
-		let tr = document.createElement("tr");
-		tr.innerHTML = `
-      <td>${transaction.name}</td>
-      <td>${transaction.value}</td>
-    `;
-
-		tbody.appendChild(tr);
-	});
-}
-
-function populateChart() {
-	// copy array and reverse it
-	let reversed = transactions.slice().reverse();
-	let sum = 0;
-
-	// create date labels for chart
-	let labels = reversed.map((t) => {
-		let date = new Date(t.date);
-		return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
-	});
-
-	// create incremental values for chart
-	let data = reversed.map((t) => {
-		sum += parseInt(t.value);
-		return sum;
-	});
-
-	// remove old chart if it exists
-	if (myChart) {
-		myChart.destroy();
-	}
-
-	let ctx = document.getElementById("myChart").getContext("2d");
-
-	myChart = new Chart(ctx, {
-		type: "line",
-		data: {
-			labels,
-			datasets: [
-				{
-					label: "Total Over Time",
-					fill: true,
-					backgroundColor: "#6666ff",
-					data
-				}
-			]
-		}
-	});
-}
 
 function sendTransaction(isAdding) {
 	let nameEl = document.querySelector("#t-name");
@@ -112,9 +63,9 @@ function sendTransaction(isAdding) {
 	transactions.unshift(transaction);
 
 	// re-run logic to populate ui with new record
-	populateChart();
-	populateTable();
-	populateTotal();
+	populateChart(transactions, myChart);
+	populateTable(transactions);
+	populateTotal(transactions);
 
 	// also send to server
 	fetch("/api/transaction", {
@@ -137,11 +88,10 @@ function sendTransaction(isAdding) {
 				amountEl.value = "";
 			}
 		})
-		.catch((err) => {
+		.catch(() => {
+			console.log("No connection.");
 			// fetch failed, so save in indexed db
-			saveRecord(transaction);
-
-			// clear form
+			useIndexedDb("budget-tracker-pending", "pending", "add", transaction);
 			nameEl.value = "";
 			amountEl.value = "";
 		});

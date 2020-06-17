@@ -5,7 +5,7 @@ const express = require("express"),
 	PORT = 3500,
 	app = express();
 
-mongoose.connect("mongodb://localhost/budget", {
+mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost/budget", {
 	useUnifiedTopology: true,
 	useNewUrlParser: true,
 	useFindAndModify: false
